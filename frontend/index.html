@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Daily Journal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Evening Reflection<span id="editIndicator" class="edit-indicator" style="display: none;">Editing</span></h1>
+      <div class="date-display" id="dateDisplay"></div>
+    </header>
+
+    <form id="journalForm">
+      <!-- MOOD & ENERGY -->
+      <section class="section">
+        <h2 class="section-title">Mood & Energy</h2>
+
+        <div class="form-group">
+          <label>Mood</label>
+          <div class="slider-container">
+            <input type="range" id="mood" name="mood" min="1" max="10" value="5">
+            <span class="slider-value" id="moodValue">5</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Energy</label>
+          <div class="slider-container">
+            <input type="range" id="energy" name="energy" min="1" max="10" value="5">
+            <span class="slider-value" id="energyValue">5</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Stress</label>
+          <div class="slider-container">
+            <input type="range" id="stress" name="stress" min="1" max="10" value="5">
+            <span class="slider-value" id="stressValue">5</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- RELATIONSHIPS -->
+      <section class="section">
+        <h2 class="section-title">Relationships</h2>
+
+        <p class="subsection-label">Ashley</p>
+        <div class="form-group">
+          <label>Connection</label>
+          <div class="slider-container">
+            <input type="range" id="ashley_connection" name="ashley_connection" min="1" max="10" value="5">
+            <span class="slider-value" id="ashley_connectionValue">5</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="ashley_conflict">Conflict?</button>
+            <button type="button" class="toggle-btn" data-field="ashley_thoughtful">Thoughtful?</button>
+            <button type="button" class="toggle-btn" data-field="ashley_withdrew">Withdrew?</button>
+          </div>
+        </div>
+
+        <p class="subsection-label">Kids</p>
+        <div class="form-group">
+          <label>Quality Time</label>
+          <div class="slider-container">
+            <input type="range" id="kids_quality_time" name="kids_quality_time" min="1" max="10" value="5">
+            <span class="slider-value" id="kids_quality_timeValue">5</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="kids_engaged">Engaged?</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- BANNED BEHAVIORS -->
+      <section class="section">
+        <h2 class="section-title">Banned Behaviors</h2>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="thc">THC</button>
+            <button type="button" class="toggle-btn" data-field="alcohol">Alcohol</button>
+            <button type="button" class="toggle-btn" data-field="fantasy_sports">Fantasy Sports</button>
+            <button type="button" class="toggle-btn" data-field="other_compulsion">Other</button>
+          </div>
+        </div>
+
+        <div class="form-group conditional-field" id="otherCompulsionField">
+          <label>What was it?</label>
+          <input type="text" id="other_compulsion_notes" name="other_compulsion_notes" placeholder="Describe the behavior...">
+        </div>
+      </section>
+
+      <!-- RECOVERY COMPLIANCE -->
+      <section class="section">
+        <h2 class="section-title">Recovery Compliance</h2>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="naltrexone">Naltrexone</button>
+            <button type="button" class="toggle-btn" data-field="meeting_attended">Meeting</button>
+            <button type="button" class="toggle-btn" data-field="sponsor_contact">Sponsor Contact</button>
+            <button type="button" class="toggle-btn" data-field="therapy_this_week">Therapy This Week</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Cravings</label>
+          <div class="slider-container">
+            <input type="range" id="cravings" name="cravings" min="1" max="10" value="5">
+            <span class="slider-value" id="cravingsValue">5</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- HEALTH PROTOCOLS -->
+      <section class="section">
+        <h2 class="section-title">Health Protocols</h2>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="medications_taken">Medications</button>
+            <button type="button" class="toggle-btn" data-field="post_dinner_walk">Walk</button>
+            <button type="button" class="toggle-btn" data-field="meditation">Meditation</button>
+            <button type="button" class="toggle-btn" data-field="workout">Workout</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Sleep Quality (Last Night)</label>
+          <div class="slider-container">
+            <input type="range" id="sleep_quality" name="sleep_quality" min="1" max="10" value="5">
+            <span class="slider-value" id="sleep_qualityValue">5</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORK -->
+      <section class="section">
+        <h2 class="section-title">Work</h2>
+
+        <div class="form-group">
+          <label>Productive Hours</label>
+          <input type="number" id="productive_hours" name="productive_hours" min="0" max="16" step="0.5" placeholder="0">
+        </div>
+
+        <div class="form-group">
+          <label>Strategic % (vs. Reactive)</label>
+          <div class="slider-container">
+            <input type="range" id="strategic_percent" name="strategic_percent" min="0" max="100" step="5" value="50">
+            <span class="slider-value" id="strategic_percentValue">50%</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Decision Fatigue</label>
+          <div class="slider-container">
+            <input type="range" id="decision_fatigue" name="decision_fatigue" min="1" max="10" value="5">
+            <span class="slider-value" id="decision_fatigueValue">5</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" data-field="protected_peak_hours">Protected Peak Hours?</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- REFLECTION -->
+      <section class="section">
+        <h2 class="section-title">Reflection</h2>
+
+        <div class="form-group">
+          <label>What went well?</label>
+          <textarea id="what_went_well" name="what_went_well" placeholder="2-3 sentences..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>What would you change?</label>
+          <textarea id="what_to_change" name="what_to_change" placeholder="2-3 sentences..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Tomorrow's #1 Priority</label>
+          <input type="text" id="tomorrow_priority" name="tomorrow_priority" placeholder="One thing...">
+        </div>
+      </section>
+
+      <!-- SUBMIT -->
+      <div class="submit-section">
+        <button type="submit" class="submit-btn" id="submitBtn">Save Entry</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
