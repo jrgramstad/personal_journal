@@ -7,6 +7,7 @@ let isEditMode = false;
 let currentView = 'today'; // 'today' or 'history'
 let selectedDate = null; // null means today, otherwise YYYY-MM-DD
 let historyEntries = [];
+let currentWeekStart = null; // Start of currently viewed week (Monday)
 
 // Toggle field states
 const toggleStates = {
@@ -41,6 +42,23 @@ const entryView = document.getElementById('entryView');
 const historyList = document.getElementById('historyList');
 const tabBtns = document.querySelectorAll('.tab-btn');
 
+// Weekly summary DOM elements
+const weekLabel = document.getElementById('weekLabel');
+const prevWeekBtn = document.getElementById('prevWeekBtn');
+const nextWeekBtn = document.getElementById('nextWeekBtn');
+const summaryEntries = document.getElementById('summaryEntries');
+const avgMood = document.getElementById('avgMood');
+const avgEnergy = document.getElementById('avgEnergy');
+const avgStress = document.getElementById('avgStress');
+const naltrexoneFill = document.getElementById('naltrexoneFill');
+const naltrexoneValue = document.getElementById('naltrexoneValue');
+const meetingsCount = document.getElementById('meetingsCount');
+const sponsorCount = document.getElementById('sponsorCount');
+const avgCravings = document.getElementById('avgCravings');
+const bannedSummary = document.getElementById('bannedSummary');
+const highlightsSection = document.getElementById('highlightsSection');
+const highlightsGrid = document.getElementById('highlightsGrid');
+
 // Slider fields with their value display elements
 const sliderFields = [
   'mood', 'energy', 'stress',
@@ -58,6 +76,7 @@ async function init() {
   setupToggles();
   setupForm();
   setupTabs();
+  setupWeekNav();
   await loadTodayEntry();
 }
 
@@ -128,6 +147,63 @@ function setupTabs() {
   });
 }
 
+function setupWeekNav() {
+  // Initialize to current week
+  currentWeekStart = getWeekStart(new Date());
+
+  prevWeekBtn.addEventListener('click', () => {
+    // Go to previous week
+    currentWeekStart = new Date(currentWeekStart);
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+    loadHistory();
+  });
+
+  nextWeekBtn.addEventListener('click', () => {
+    // Go to next week
+    currentWeekStart = new Date(currentWeekStart);
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    loadHistory();
+  });
+}
+
+// Get Monday of the week for a given date
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Get Sunday of the week
+function getWeekEnd(weekStart) {
+  const d = new Date(weekStart);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+// Format date as YYYY-MM-DD
+function formatDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Format week range for display
+function formatWeekRange(weekStart) {
+  const weekEnd = getWeekEnd(weekStart);
+  const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' });
+
+  if (startMonth === endMonth) {
+    return `${startMonth} ${weekStart.getDate()}-${weekEnd.getDate()}`;
+  } else {
+    return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}`;
+  }
+}
+
 function switchTab(tab) {
   currentView = tab;
 
@@ -140,6 +216,8 @@ function switchTab(tab) {
   if (tab === 'history') {
     entryView.style.display = 'none';
     historyView.style.display = 'block';
+    // Reset to current week when switching to history
+    currentWeekStart = getWeekStart(new Date());
     loadHistory();
   } else {
     historyView.style.display = 'none';
@@ -158,6 +236,13 @@ function switchTab(tab) {
 async function loadHistory() {
   historyList.innerHTML = '<p class="loading">Loading entries...</p>';
 
+  // Update week label
+  weekLabel.textContent = formatWeekRange(currentWeekStart);
+
+  // Disable next button if we're on current week
+  const thisWeekStart = getWeekStart(new Date());
+  nextWeekBtn.disabled = currentWeekStart >= thisWeekStart;
+
   try {
     const { data, error } = await supabase
       .from('journal_entries')
@@ -171,6 +256,11 @@ async function loadHistory() {
     }
 
     historyEntries = data || [];
+
+    // Calculate and render weekly summary
+    renderWeeklySummary();
+
+    // Filter and render history for current week
     renderHistory();
   } catch (err) {
     console.error('Error:', err);
@@ -178,18 +268,176 @@ async function loadHistory() {
   }
 }
 
+function getWeekEntries() {
+  const weekStart = formatDate(currentWeekStart);
+  const weekEnd = formatDate(getWeekEnd(currentWeekStart));
+
+  return historyEntries.filter(entry => {
+    return entry.entry_date >= weekStart && entry.entry_date <= weekEnd;
+  });
+}
+
+function renderWeeklySummary() {
+  const weekEntries = getWeekEntries();
+  const entryCount = weekEntries.length;
+
+  // Update entries count
+  summaryEntries.textContent = `${entryCount} of 7 days`;
+
+  if (entryCount === 0) {
+    // No entries - show defaults
+    avgMood.textContent = '-';
+    avgEnergy.textContent = '-';
+    avgStress.textContent = '-';
+    naltrexoneFill.style.width = '0%';
+    naltrexoneValue.textContent = '0/0';
+    meetingsCount.textContent = '0';
+    sponsorCount.textContent = '0';
+    avgCravings.textContent = '-';
+    bannedSummary.innerHTML = '<span class="banned-clean">No data this week</span>';
+    highlightsSection.style.display = 'none';
+    return;
+  }
+
+  // Calculate averages
+  const moodAvg = calculateAverage(weekEntries, 'mood');
+  const energyAvg = calculateAverage(weekEntries, 'energy');
+  const stressAvg = calculateAverage(weekEntries, 'stress');
+  const cravingsAvg = calculateAverage(weekEntries, 'cravings');
+
+  avgMood.textContent = moodAvg !== null ? moodAvg.toFixed(1) : '-';
+  avgEnergy.textContent = energyAvg !== null ? energyAvg.toFixed(1) : '-';
+  avgStress.textContent = stressAvg !== null ? stressAvg.toFixed(1) : '-';
+  avgCravings.textContent = cravingsAvg !== null ? cravingsAvg.toFixed(1) : '-';
+
+  // Calculate recovery compliance
+  const naltrexoneCount = weekEntries.filter(e => e.naltrexone).length;
+  const meetingCount = weekEntries.filter(e => e.meeting_attended).length;
+  const sponsorContactCount = weekEntries.filter(e => e.sponsor_contact).length;
+
+  const naltrexonePercent = (naltrexoneCount / entryCount) * 100;
+  naltrexoneFill.style.width = `${naltrexonePercent}%`;
+  naltrexoneValue.textContent = `${naltrexoneCount}/${entryCount}`;
+  meetingsCount.textContent = meetingCount;
+  sponsorCount.textContent = sponsorContactCount;
+
+  // Calculate banned behaviors
+  const bannedBehaviors = {
+    THC: weekEntries.filter(e => e.thc).length,
+    Alcohol: weekEntries.filter(e => e.alcohol).length,
+    Fantasy: weekEntries.filter(e => e.fantasy_sports).length,
+    Other: weekEntries.filter(e => e.other_compulsion).length
+  };
+
+  const totalIncidents = Object.values(bannedBehaviors).reduce((a, b) => a + b, 0);
+
+  if (totalIncidents === 0) {
+    bannedSummary.innerHTML = '<span class="banned-clean">Clean week!</span>';
+  } else {
+    const incidentHtml = Object.entries(bannedBehaviors)
+      .filter(([_, count]) => count > 0)
+      .map(([name, count]) => `<span class="banned-incident">${name}: ${count}</span>`)
+      .join('');
+    bannedSummary.innerHTML = incidentHtml;
+  }
+
+  // Calculate highlights (best mood day)
+  renderHighlights(weekEntries);
+}
+
+function calculateAverage(entries, field) {
+  const values = entries.map(e => e[field]).filter(v => v !== null && v !== undefined);
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function renderHighlights(entries) {
+  if (entries.length < 2) {
+    highlightsSection.style.display = 'none';
+    return;
+  }
+
+  const highlights = [];
+
+  // Find best mood day
+  const bestMood = entries.reduce((best, entry) => {
+    if (entry.mood !== null && (best === null || entry.mood > best.mood)) {
+      return entry;
+    }
+    return best;
+  }, null);
+
+  if (bestMood && bestMood.mood !== null) {
+    const date = new Date(bestMood.entry_date + 'T00:00:00');
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    highlights.push({
+      label: 'Best mood',
+      value: `${dayName} (${bestMood.mood})`
+    });
+  }
+
+  // Find highest energy day
+  const bestEnergy = entries.reduce((best, entry) => {
+    if (entry.energy !== null && (best === null || entry.energy > best.energy)) {
+      return entry;
+    }
+    return best;
+  }, null);
+
+  if (bestEnergy && bestEnergy.energy !== null && bestEnergy !== bestMood) {
+    const date = new Date(bestEnergy.entry_date + 'T00:00:00');
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    highlights.push({
+      label: 'Highest energy',
+      value: `${dayName} (${bestEnergy.energy})`
+    });
+  }
+
+  // Find lowest stress day
+  const lowestStress = entries.reduce((best, entry) => {
+    if (entry.stress !== null && (best === null || entry.stress < best.stress)) {
+      return entry;
+    }
+    return best;
+  }, null);
+
+  if (lowestStress && lowestStress.stress !== null) {
+    const date = new Date(lowestStress.entry_date + 'T00:00:00');
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    highlights.push({
+      label: 'Lowest stress',
+      value: `${dayName} (${lowestStress.stress})`
+    });
+  }
+
+  if (highlights.length === 0) {
+    highlightsSection.style.display = 'none';
+    return;
+  }
+
+  highlightsSection.style.display = 'block';
+  highlightsGrid.innerHTML = highlights.map(h => `
+    <div class="highlight-item">
+      <span class="highlight-label">${h.label}</span>
+      <span class="highlight-value">${h.value}</span>
+    </div>
+  `).join('');
+}
+
 function renderHistory() {
-  if (historyEntries.length === 0) {
+  const weekEntries = getWeekEntries();
+
+  if (weekEntries.length === 0) {
     historyList.innerHTML = `
       <div class="history-empty">
         <div class="history-empty-icon">📓</div>
-        <p>No journal entries yet.<br>Start your first entry today!</p>
+        <p>No entries this week.<br>Start journaling today!</p>
       </div>
     `;
     return;
   }
 
-  historyList.innerHTML = historyEntries.map(entry => {
+  historyList.innerHTML = weekEntries.map(entry => {
     const date = new Date(entry.entry_date + 'T00:00:00');
     const dateStr = date.toLocaleDateString('en-US', {
       weekday: 'short',

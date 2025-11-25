@@ -24,6 +24,84 @@
 
     <!-- History View -->
     <div id="historyView" class="view" style="display: none;">
+      <!-- Week Navigator -->
+      <div class="week-nav">
+        <button type="button" class="week-nav-btn" id="prevWeekBtn">←</button>
+        <span class="week-nav-label" id="weekLabel">Loading...</span>
+        <button type="button" class="week-nav-btn" id="nextWeekBtn">→</button>
+      </div>
+
+      <!-- Weekly Summary -->
+      <div class="weekly-summary" id="weeklySummary">
+        <div class="summary-header">
+          <h3 class="summary-title">Weekly Summary</h3>
+          <span class="summary-entries" id="summaryEntries">0 of 7 days</span>
+        </div>
+
+        <!-- Mood/Energy/Stress Averages -->
+        <div class="summary-section">
+          <div class="summary-stat-grid">
+            <div class="summary-stat">
+              <span class="summary-stat-label">Mood</span>
+              <span class="summary-stat-value" id="avgMood">-</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-stat-label">Energy</span>
+              <span class="summary-stat-value" id="avgEnergy">-</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-stat-label">Stress</span>
+              <span class="summary-stat-value" id="avgStress">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recovery Compliance -->
+        <div class="summary-section">
+          <h4 class="summary-section-title">Recovery</h4>
+          <div class="compliance-grid">
+            <div class="compliance-item">
+              <span class="compliance-label">Naltrexone</span>
+              <div class="compliance-bar">
+                <div class="compliance-fill" id="naltrexoneFill"></div>
+              </div>
+              <span class="compliance-value" id="naltrexoneValue">0/0</span>
+            </div>
+            <div class="compliance-item">
+              <span class="compliance-label">Meetings</span>
+              <span class="compliance-count" id="meetingsCount">0</span>
+            </div>
+            <div class="compliance-item">
+              <span class="compliance-label">Sponsor</span>
+              <span class="compliance-count" id="sponsorCount">0</span>
+            </div>
+            <div class="compliance-item">
+              <span class="compliance-label">Avg Cravings</span>
+              <span class="compliance-count" id="avgCravings">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banned Behaviors -->
+        <div class="summary-section">
+          <h4 class="summary-section-title">Banned Behaviors</h4>
+          <div class="banned-summary" id="bannedSummary">
+            <span class="banned-clean">Clean week</span>
+          </div>
+        </div>
+
+        <!-- Highlights -->
+        <div class="summary-section" id="highlightsSection" style="display: none;">
+          <h4 class="summary-section-title">Highlights</h4>
+          <div class="highlights-grid" id="highlightsGrid"></div>
+        </div>
+      </div>
+
+      <!-- Entries List Header -->
+      <div class="history-list-header">
+        <h3>Entries</h3>
+      </div>
+
       <div id="historyList" class="history-list">
         <p class="loading">Loading entries...</p>
       </div>
