@@ -16,6 +16,21 @@
       <div class="date-display" id="dateDisplay"></div>
     </header>
 
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="today">Today</button>
+      <button class="tab-btn" data-tab="history">History</button>
+    </nav>
+
+    <!-- History View -->
+    <div id="historyView" class="view" style="display: none;">
+      <div id="historyList" class="history-list">
+        <p class="loading">Loading entries...</p>
+      </div>
+    </div>
+
+    <!-- Today/Entry View -->
+    <div id="entryView" class="view">
     <form id="journalForm">
       <!-- MOOD & ENERGY -->
       <section class="section">
@@ -203,6 +218,7 @@
         <button type="submit" class="submit-btn" id="submitBtn">Save Entry</button>
       </div>
     </form>
+    </div>
   </div>
 
   <!-- Toast Notification -->

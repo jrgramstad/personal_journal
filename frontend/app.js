@@ -4,6 +4,9 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // State
 let existingEntryId = null;
 let isEditMode = false;
+let currentView = 'today'; // 'today' or 'history'
+let selectedDate = null; // null means today, otherwise YYYY-MM-DD
+let historyEntries = [];
 
 // Toggle field states
 const toggleStates = {
@@ -33,6 +36,10 @@ const editIndicator = document.getElementById('editIndicator');
 const submitBtn = document.getElementById('submitBtn');
 const toast = document.getElementById('toast');
 const otherCompulsionField = document.getElementById('otherCompulsionField');
+const historyView = document.getElementById('historyView');
+const entryView = document.getElementById('entryView');
+const historyList = document.getElementById('historyList');
+const tabBtns = document.querySelectorAll('.tab-btn');
 
 // Slider fields with their value display elements
 const sliderFields = [
@@ -50,13 +57,17 @@ async function init() {
   setupSliders();
   setupToggles();
   setupForm();
+  setupTabs();
   await loadTodayEntry();
 }
 
 function setupDate() {
-  const today = new Date();
+  updateDateDisplay(new Date());
+}
+
+function updateDateDisplay(date) {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  dateDisplay.textContent = today.toLocaleDateString('en-US', options);
+  dateDisplay.textContent = date.toLocaleDateString('en-US', options);
 }
 
 function setupSliders() {
@@ -106,6 +117,209 @@ function setupToggles() {
 
 function setupForm() {
   form.addEventListener('submit', handleSubmit);
+}
+
+function setupTabs() {
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      switchTab(tab);
+    });
+  });
+}
+
+function switchTab(tab) {
+  currentView = tab;
+
+  // Update tab buttons
+  tabBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  // Show/hide views
+  if (tab === 'history') {
+    entryView.style.display = 'none';
+    historyView.style.display = 'block';
+    loadHistory();
+  } else {
+    historyView.style.display = 'none';
+    entryView.style.display = 'block';
+    // Reset to today if coming from history
+    if (selectedDate) {
+      selectedDate = null;
+      removeBackButton();
+      resetForm();
+      updateDateDisplay(new Date());
+      loadTodayEntry();
+    }
+  }
+}
+
+async function loadHistory() {
+  historyList.innerHTML = '<p class="loading">Loading entries...</p>';
+
+  try {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('*')
+      .order('entry_date', { ascending: false });
+
+    if (error) {
+      console.error('Error loading history:', error);
+      historyList.innerHTML = '<p class="history-empty">Error loading entries</p>';
+      return;
+    }
+
+    historyEntries = data || [];
+    renderHistory();
+  } catch (err) {
+    console.error('Error:', err);
+    historyList.innerHTML = '<p class="history-empty">Error connecting to database</p>';
+  }
+}
+
+function renderHistory() {
+  if (historyEntries.length === 0) {
+    historyList.innerHTML = `
+      <div class="history-empty">
+        <div class="history-empty-icon">📓</div>
+        <p>No journal entries yet.<br>Start your first entry today!</p>
+      </div>
+    `;
+    return;
+  }
+
+  historyList.innerHTML = historyEntries.map(entry => {
+    const date = new Date(entry.entry_date + 'T00:00:00');
+    const dateStr = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    // Collect flags for banned behaviors
+    const flags = [];
+    if (entry.thc) flags.push('THC');
+    if (entry.alcohol) flags.push('Alcohol');
+    if (entry.fantasy_sports) flags.push('Fantasy');
+    if (entry.other_compulsion) flags.push('Other');
+
+    const flagsHtml = flags.length > 0
+      ? `<div class="history-card-flags">${flags.map(f => `<span class="history-card-flag">${f}</span>`).join('')}</div>`
+      : '';
+
+    return `
+      <div class="history-card" data-date="${entry.entry_date}">
+        <div class="history-card-date">${dateStr}</div>
+        <div class="history-card-stats">
+          <span class="history-card-stat">Mood <span class="value">${entry.mood || '-'}</span></span>
+          <span class="history-card-stat">Energy <span class="value">${entry.energy || '-'}</span></span>
+          <span class="history-card-stat">Stress <span class="value">${entry.stress || '-'}</span></span>
+        </div>
+        ${flagsHtml}
+      </div>
+    `;
+  }).join('');
+
+  // Add click handlers
+  document.querySelectorAll('.history-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const date = card.dataset.date;
+      selectEntry(date);
+    });
+  });
+}
+
+async function selectEntry(date) {
+  selectedDate = date;
+
+  // Find entry in cached data
+  const entry = historyEntries.find(e => e.entry_date === date);
+  if (!entry) return;
+
+  // Switch to entry view
+  historyView.style.display = 'none';
+  entryView.style.display = 'block';
+
+  // Update tab buttons to show neither as truly "active" visually
+  tabBtns.forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  // Add back button if not already present
+  addBackButton();
+
+  // Update date display
+  const entryDate = new Date(date + 'T00:00:00');
+  updateDateDisplay(entryDate);
+
+  // Reset and populate form
+  resetForm();
+  existingEntryId = entry.id;
+  isEditMode = true;
+  editIndicator.style.display = 'inline-block';
+  submitBtn.textContent = 'Update Entry';
+  populateForm(entry);
+}
+
+function addBackButton() {
+  // Check if back button already exists
+  if (document.querySelector('.back-btn')) return;
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'back-btn';
+  backBtn.innerHTML = '← Back to History';
+  backBtn.addEventListener('click', () => {
+    switchTab('history');
+  });
+
+  entryView.insertBefore(backBtn, entryView.firstChild);
+}
+
+function removeBackButton() {
+  const backBtn = document.querySelector('.back-btn');
+  if (backBtn) {
+    backBtn.remove();
+  }
+}
+
+function resetForm() {
+  // Reset sliders to default
+  sliderFields.forEach(field => {
+    const slider = document.getElementById(field);
+    const valueDisplay = document.getElementById(`${field}Value`);
+    if (slider) {
+      slider.value = field === 'strategic_percent' ? 50 : 5;
+      updateSliderDisplay(slider, valueDisplay, field);
+    }
+  });
+
+  // Reset toggles
+  Object.keys(toggleStates).forEach(field => {
+    toggleStates[field] = false;
+    const btn = document.querySelector(`[data-field="${field}"]`);
+    if (btn) {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Hide other compulsion field
+  otherCompulsionField.classList.remove('visible');
+
+  // Clear text inputs
+  document.getElementById('productive_hours').value = '';
+  document.getElementById('other_compulsion_notes').value = '';
+  document.getElementById('what_went_well').value = '';
+  document.getElementById('what_to_change').value = '';
+  document.getElementById('tomorrow_priority').value = '';
+
+  // Reset state
+  existingEntryId = null;
+  isEditMode = false;
+  editIndicator.style.display = 'none';
+  submitBtn.textContent = 'Save Entry';
 }
 
 async function loadTodayEntry() {
@@ -225,6 +439,17 @@ async function handleSubmit(e) {
     showToast(isEditMode ? 'Entry updated!' : 'Entry saved!');
     submitBtn.textContent = 'Update Entry';
 
+    // Update history cache if we have one
+    if (historyEntries.length > 0) {
+      const updatedEntry = result.data[0];
+      const existingIndex = historyEntries.findIndex(e => e.entry_date === updatedEntry.entry_date);
+      if (existingIndex >= 0) {
+        historyEntries[existingIndex] = updatedEntry;
+      } else {
+        historyEntries.unshift(updatedEntry);
+      }
+    }
+
   } catch (err) {
     console.error('Error saving entry:', err);
     showToast('Error saving entry. Please try again.', true);
@@ -237,8 +462,11 @@ async function handleSubmit(e) {
 function collectFormData() {
   const productiveHours = document.getElementById('productive_hours').value;
 
+  // Use selected date or today
+  const entryDate = selectedDate || getTodayDate();
+
   return {
-    entry_date: getTodayDate(),
+    entry_date: entryDate,
 
     // Mood & Energy
     mood: parseInt(document.getElementById('mood').value),
