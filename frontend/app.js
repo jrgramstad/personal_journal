@@ -361,12 +361,20 @@ function handleDeleteCustomItem(e) {
 // ===== DATE & SLIDERS =====
 
 function setupDate() {
-  updateDateDisplay(new Date());
+  updateDateDisplay(getJournalDisplayDate());
 }
 
-function updateDateDisplay(date) {
+function updateDateDisplay(date, isEditing = false) {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  dateDisplay.textContent = date.toLocaleDateString('en-US', options);
+  const dateStr = date.toLocaleDateString('en-US', options);
+
+  if (isEditing) {
+    // When editing from history, just show the date
+    dateDisplay.textContent = dateStr;
+  } else {
+    // Default journal view - show "Reflecting on" prefix
+    dateDisplay.innerHTML = `<span class="reflecting-label">Reflecting on</span> ${dateStr}`;
+  }
 }
 
 function setupSliders() {
@@ -480,7 +488,7 @@ function switchTab(tab) {
       selectedDate = null;
       removeBackButton();
       resetForm();
-      updateDateDisplay(new Date());
+      updateDateDisplay(getJournalDisplayDate());
       loadTodayEntry();
     }
   }
@@ -759,7 +767,7 @@ async function selectEntry(date) {
   addBackButton();
 
   const entryDate = new Date(date + 'T00:00:00');
-  updateDateDisplay(entryDate);
+  updateDateDisplay(entryDate, true);
 
   resetForm();
   existingEntryId = entry.id;
@@ -823,13 +831,13 @@ function resetForm() {
 }
 
 async function loadTodayEntry() {
-  const today = getTodayDate();
+  const journalDate = getJournalDate();
 
   try {
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('entry_date', today)
+      .eq('entry_date', journalDate)
       .single();
 
     if (error && error.code !== 'PGRST116') {
@@ -972,7 +980,7 @@ async function handleSubmit(e) {
 
 function collectFormData() {
   const productiveHours = document.getElementById('productive_hours').value;
-  const entryDate = selectedDate || getTodayDate();
+  const entryDate = selectedDate || getJournalDate();
 
   // Collect custom toggle values
   const customBanned = {};
@@ -1040,12 +1048,21 @@ function collectFormData() {
   };
 }
 
-function getTodayDate() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
+function getJournalDate() {
+  // Journal entries are for the previous day (evening reflection on the day that just ended)
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const year = yesterday.getFullYear();
+  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+  const day = String(yesterday.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getJournalDisplayDate() {
+  // Returns the Date object for yesterday (for display purposes)
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday;
 }
 
 function showToast(message, isError = false) {

@@ -59,6 +59,15 @@ header h1 {
   font-size: 0.9rem;
 }
 
+.reflecting-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
 /* Tab Navigation */
 .tab-nav {
   display: flex;
