@@ -78,6 +78,11 @@ const dateNavLabel = document.getElementById('dateNavLabel');
 const prevDayBtn = document.getElementById('prevDayBtn');
 const nextDayBtn = document.getElementById('nextDayBtn');
 
+// Streak elements
+const streakDisplay = document.getElementById('streakDisplay');
+const streakCount = document.getElementById('streakCount');
+const streakLabel = document.querySelector('.streak-label');
+
 // Settings containers
 const settingsBanned = document.getElementById('settingsBanned');
 const settingsRecovery = document.getElementById('settingsRecovery');
@@ -125,6 +130,7 @@ async function init() {
   setupDateNav();
   setupSettings();
   await loadEntry();
+  await loadAndDisplayStreak();
 }
 
 // ===== SETTINGS MANAGEMENT =====
@@ -1030,6 +1036,9 @@ async function handleSubmit(e) {
       }
     }
 
+    // Refresh streak after saving
+    await loadAndDisplayStreak();
+
   } catch (err) {
     console.error('Error saving entry:', err);
     showToast('Error saving entry. Please try again.', true);
@@ -1114,6 +1123,61 @@ function getYesterdayDateStr() {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   return formatDate(yesterday);
+}
+
+// ===== STREAK CALCULATION =====
+
+async function loadAndDisplayStreak() {
+  try {
+    const { data, error } = await supabase
+      .from('journal_entries')
+      .select('entry_date')
+      .order('entry_date', { ascending: false });
+
+    if (error) {
+      console.error('Error loading streak data:', error);
+      return;
+    }
+
+    const streak = calculateStreak(data || []);
+    displayStreak(streak);
+  } catch (err) {
+    console.error('Error calculating streak:', err);
+  }
+}
+
+function calculateStreak(entries) {
+  if (entries.length === 0) return 0;
+
+  // Get all entry dates as a Set for fast lookup
+  const entryDates = new Set(entries.map(e => e.entry_date));
+
+  // Start from yesterday and count backwards
+  let streak = 0;
+  let checkDate = new Date();
+  checkDate.setDate(checkDate.getDate() - 1); // Start from yesterday
+
+  while (true) {
+    const dateStr = formatDate(checkDate);
+    if (entryDates.has(dateStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1); // Go back one day
+    } else {
+      break; // Streak broken
+    }
+  }
+
+  return streak;
+}
+
+function displayStreak(streak) {
+  if (streak > 0) {
+    streakDisplay.style.display = 'flex';
+    streakCount.textContent = streak;
+    streakLabel.textContent = streak === 1 ? 'day streak' : 'day streak';
+  } else {
+    streakDisplay.style.display = 'none';
+  }
 }
 
 function showToast(message, isError = false) {
