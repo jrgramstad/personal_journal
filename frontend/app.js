@@ -4,31 +4,49 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // State
 let existingEntryId = null;
 let isEditMode = false;
-let currentView = 'today'; // 'today' or 'history'
+let currentView = 'today'; // 'today', 'history', or 'settings'
 let selectedDate = null; // null means today, otherwise YYYY-MM-DD
 let historyEntries = [];
 let currentWeekStart = null; // Start of currently viewed week (Monday)
 
-// Toggle field states
-const toggleStates = {
-  ashley_conflict: false,
-  ashley_thoughtful: false,
-  ashley_withdrew: false,
-  kids_engaged: false,
-  thc: false,
-  alcohol: false,
-  fantasy_sports: false,
-  other_compulsion: false,
-  naltrexone: false,
-  meeting_attended: false,
-  sponsor_contact: false,
-  therapy_this_week: false,
-  medications_taken: false,
-  post_dinner_walk: false,
-  meditation: false,
-  workout: false,
-  protected_peak_hours: false
+// Built-in items for each category (can be hidden but not deleted)
+const builtInItems = {
+  banned: [
+    { id: 'thc', label: 'THC' },
+    { id: 'alcohol', label: 'Alcohol' },
+    { id: 'fantasy_sports', label: 'Fantasy Sports' },
+    { id: 'other_compulsion', label: 'Other' }
+  ],
+  recovery: [
+    { id: 'naltrexone', label: 'Naltrexone' },
+    { id: 'meeting_attended', label: 'Meeting' },
+    { id: 'sponsor_contact', label: 'Sponsor Contact' },
+    { id: 'therapy_this_week', label: 'Therapy This Week' }
+  ],
+  health: [
+    { id: 'medications_taken', label: 'Medications' },
+    { id: 'post_dinner_walk', label: 'Walk' },
+    { id: 'meditation', label: 'Meditation' },
+    { id: 'workout', label: 'Workout' }
+  ]
 };
+
+// Settings: which items are visible (stored in localStorage)
+let settings = {
+  banned: {},    // { itemId: true/false }
+  recovery: {},
+  health: {}
+};
+
+// Custom items (stored in localStorage)
+let customItems = {
+  banned: [],    // [{ id: 'custom_xxx', label: 'Custom Label' }]
+  recovery: [],
+  health: []
+};
+
+// Toggle field states (includes both built-in and custom)
+const toggleStates = {};
 
 // DOM Elements
 const form = document.getElementById('journalForm');
@@ -39,8 +57,19 @@ const toast = document.getElementById('toast');
 const otherCompulsionField = document.getElementById('otherCompulsionField');
 const historyView = document.getElementById('historyView');
 const entryView = document.getElementById('entryView');
+const settingsView = document.getElementById('settingsView');
 const historyList = document.getElementById('historyList');
 const tabBtns = document.querySelectorAll('.tab-btn');
+
+// Toggle containers
+const bannedToggles = document.getElementById('bannedToggles');
+const recoveryToggles = document.getElementById('recoveryToggles');
+const healthToggles = document.getElementById('healthToggles');
+
+// Settings containers
+const settingsBanned = document.getElementById('settingsBanned');
+const settingsRecovery = document.getElementById('settingsRecovery');
+const settingsHealth = document.getElementById('settingsHealth');
 
 // Weekly summary DOM elements
 const weekLabel = document.getElementById('weekLabel');
@@ -71,14 +100,265 @@ const sliderFields = [
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  loadSettings();
+  loadCustomItems();
+  initializeToggleStates();
   setupDate();
   setupSliders();
-  setupToggles();
+  renderAllToggles();
   setupForm();
   setupTabs();
   setupWeekNav();
+  setupSettings();
   await loadTodayEntry();
 }
+
+// ===== SETTINGS MANAGEMENT =====
+
+function loadSettings() {
+  const saved = localStorage.getItem('journalSettings');
+  if (saved) {
+    settings = JSON.parse(saved);
+  } else {
+    // Default: all built-in items visible
+    ['banned', 'recovery', 'health'].forEach(category => {
+      settings[category] = {};
+      builtInItems[category].forEach(item => {
+        settings[category][item.id] = true;
+      });
+    });
+    saveSettings();
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem('journalSettings', JSON.stringify(settings));
+}
+
+function loadCustomItems() {
+  const saved = localStorage.getItem('journalCustomItems');
+  if (saved) {
+    customItems = JSON.parse(saved);
+  }
+}
+
+function saveCustomItems() {
+  localStorage.setItem('journalCustomItems', JSON.stringify(customItems));
+}
+
+function initializeToggleStates() {
+  // Initialize all built-in toggle states
+  ['banned', 'recovery', 'health'].forEach(category => {
+    builtInItems[category].forEach(item => {
+      toggleStates[item.id] = false;
+    });
+    // Initialize custom toggle states
+    customItems[category].forEach(item => {
+      toggleStates[item.id] = false;
+    });
+  });
+}
+
+function getVisibleItems(category) {
+  const items = [];
+
+  // Add visible built-in items
+  builtInItems[category].forEach(item => {
+    if (settings[category][item.id] !== false) {
+      items.push({ ...item, isBuiltIn: true });
+    }
+  });
+
+  // Add custom items (always visible if they exist)
+  customItems[category].forEach(item => {
+    items.push({ ...item, isBuiltIn: false });
+  });
+
+  return items;
+}
+
+// ===== TOGGLE RENDERING =====
+
+function renderAllToggles() {
+  renderCategoryToggles('banned', bannedToggles);
+  renderCategoryToggles('recovery', recoveryToggles);
+  renderCategoryToggles('health', healthToggles);
+}
+
+function renderCategoryToggles(category, container) {
+  const items = getVisibleItems(category);
+
+  container.innerHTML = items.map(item => `
+    <button type="button" class="toggle-btn ${toggleStates[item.id] ? 'active' : ''}"
+            data-field="${item.id}" data-category="${category}">
+      ${item.label}
+    </button>
+  `).join('');
+
+  // Re-attach click handlers
+  container.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', handleToggleClick);
+  });
+}
+
+function handleToggleClick(e) {
+  const btn = e.currentTarget;
+  const field = btn.dataset.field;
+
+  toggleStates[field] = !toggleStates[field];
+  btn.classList.toggle('active', toggleStates[field]);
+
+  // Special handling for "Other" compulsion
+  if (field === 'other_compulsion') {
+    otherCompulsionField.classList.toggle('visible', toggleStates[field]);
+    if (!toggleStates[field]) {
+      document.getElementById('other_compulsion_notes').value = '';
+    }
+  }
+}
+
+// ===== SETTINGS UI =====
+
+function setupSettings() {
+  // Render settings items
+  renderSettingsCategory('banned', settingsBanned);
+  renderSettingsCategory('recovery', settingsRecovery);
+  renderSettingsCategory('health', settingsHealth);
+
+  // Setup add buttons
+  document.querySelectorAll('.settings-add-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const category = btn.dataset.category;
+      const inputId = `new${category.charAt(0).toUpperCase() + category.slice(1)}Item`;
+      const input = document.getElementById(inputId);
+      const label = input.value.trim();
+
+      if (label) {
+        addCustomItem(category, label);
+        input.value = '';
+      }
+    });
+  });
+
+  // Handle enter key on inputs
+  ['newBannedItem', 'newRecoveryItem', 'newHealthItem'].forEach(inputId => {
+    const input = document.getElementById(inputId);
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const btn = input.nextElementSibling;
+        btn.click();
+      }
+    });
+  });
+}
+
+function renderSettingsCategory(category, container) {
+  let html = '';
+
+  // Built-in items
+  builtInItems[category].forEach(item => {
+    const isVisible = settings[category][item.id] !== false;
+    html += `
+      <div class="settings-item" data-id="${item.id}" data-category="${category}">
+        <div class="settings-item-left">
+          <span class="settings-item-name">${item.label}</span>
+          <span class="settings-item-type">Built-in</span>
+        </div>
+        <div class="settings-item-actions">
+          <button type="button" class="settings-toggle ${isVisible ? 'active' : ''}"
+                  data-id="${item.id}" data-category="${category}" data-builtin="true"></button>
+        </div>
+      </div>
+    `;
+  });
+
+  // Custom items
+  customItems[category].forEach(item => {
+    html += `
+      <div class="settings-item" data-id="${item.id}" data-category="${category}">
+        <div class="settings-item-left">
+          <span class="settings-item-name">${item.label}</span>
+          <span class="settings-item-type">Custom</span>
+        </div>
+        <div class="settings-item-actions">
+          <button type="button" class="settings-delete-btn"
+                  data-id="${item.id}" data-category="${category}">×</button>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+
+  // Attach event handlers
+  container.querySelectorAll('.settings-toggle').forEach(toggle => {
+    toggle.addEventListener('click', handleSettingsToggle);
+  });
+
+  container.querySelectorAll('.settings-delete-btn').forEach(btn => {
+    btn.addEventListener('click', handleDeleteCustomItem);
+  });
+}
+
+function handleSettingsToggle(e) {
+  const toggle = e.currentTarget;
+  const id = toggle.dataset.id;
+  const category = toggle.dataset.category;
+
+  const isActive = toggle.classList.toggle('active');
+  settings[category][id] = isActive;
+  saveSettings();
+
+  // Re-render the form toggles
+  renderAllToggles();
+}
+
+function addCustomItem(category, label) {
+  const id = `custom_${Date.now()}`;
+  customItems[category].push({ id, label });
+  toggleStates[id] = false;
+  saveCustomItems();
+
+  // Re-render
+  const containers = {
+    banned: settingsBanned,
+    recovery: settingsRecovery,
+    health: settingsHealth
+  };
+  renderSettingsCategory(category, containers[category]);
+  renderAllToggles();
+
+  showToast(`Added "${label}"`);
+}
+
+function handleDeleteCustomItem(e) {
+  const btn = e.currentTarget;
+  const id = btn.dataset.id;
+  const category = btn.dataset.category;
+
+  // Find and remove the item
+  const index = customItems[category].findIndex(item => item.id === id);
+  if (index !== -1) {
+    const label = customItems[category][index].label;
+    customItems[category].splice(index, 1);
+    delete toggleStates[id];
+    saveCustomItems();
+
+    // Re-render
+    const containers = {
+      banned: settingsBanned,
+      recovery: settingsRecovery,
+      health: settingsHealth
+    };
+    renderSettingsCategory(category, containers[category]);
+    renderAllToggles();
+
+    showToast(`Removed "${label}"`);
+  }
+}
+
+// ===== DATE & SLIDERS =====
 
 function setupDate() {
   updateDateDisplay(new Date());
@@ -95,10 +375,7 @@ function setupSliders() {
     const valueDisplay = document.getElementById(`${field}Value`);
 
     if (slider && valueDisplay) {
-      // Set initial display
       updateSliderDisplay(slider, valueDisplay, field);
-
-      // Add input listener
       slider.addEventListener('input', () => {
         updateSliderDisplay(slider, valueDisplay, field);
       });
@@ -114,25 +391,7 @@ function updateSliderDisplay(slider, valueDisplay, field) {
   }
 }
 
-function setupToggles() {
-  const toggleBtns = document.querySelectorAll('.toggle-btn');
-
-  toggleBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const field = btn.dataset.field;
-      toggleStates[field] = !toggleStates[field];
-      btn.classList.toggle('active', toggleStates[field]);
-
-      // Special handling for "Other" compulsion
-      if (field === 'other_compulsion') {
-        otherCompulsionField.classList.toggle('visible', toggleStates[field]);
-        if (!toggleStates[field]) {
-          document.getElementById('other_compulsion_notes').value = '';
-        }
-      }
-    });
-  });
-}
+// ===== FORM & TABS =====
 
 function setupForm() {
   form.addEventListener('submit', handleSubmit);
@@ -148,42 +407,36 @@ function setupTabs() {
 }
 
 function setupWeekNav() {
-  // Initialize to current week
   currentWeekStart = getWeekStart(new Date());
 
   prevWeekBtn.addEventListener('click', () => {
-    // Go to previous week
     currentWeekStart = new Date(currentWeekStart);
     currentWeekStart.setDate(currentWeekStart.getDate() - 7);
     loadHistory();
   });
 
   nextWeekBtn.addEventListener('click', () => {
-    // Go to next week
     currentWeekStart = new Date(currentWeekStart);
     currentWeekStart.setDate(currentWeekStart.getDate() + 7);
     loadHistory();
   });
 }
 
-// Get Monday of the week for a given date
 function getWeekStart(date) {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-// Get Sunday of the week
 function getWeekEnd(weekStart) {
   const d = new Date(weekStart);
   d.setDate(d.getDate() + 6);
   return d;
 }
 
-// Format date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -191,7 +444,6 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-// Format week range for display
 function formatWeekRange(weekStart) {
   const weekEnd = getWeekEnd(weekStart);
   const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' });
@@ -207,22 +459,23 @@ function formatWeekRange(weekStart) {
 function switchTab(tab) {
   currentView = tab;
 
-  // Update tab buttons
   tabBtns.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
 
-  // Show/hide views
+  // Hide all views
+  entryView.style.display = 'none';
+  historyView.style.display = 'none';
+  settingsView.style.display = 'none';
+
   if (tab === 'history') {
-    entryView.style.display = 'none';
     historyView.style.display = 'block';
-    // Reset to current week when switching to history
     currentWeekStart = getWeekStart(new Date());
     loadHistory();
+  } else if (tab === 'settings') {
+    settingsView.style.display = 'block';
   } else {
-    historyView.style.display = 'none';
     entryView.style.display = 'block';
-    // Reset to today if coming from history
     if (selectedDate) {
       selectedDate = null;
       removeBackButton();
@@ -233,13 +486,12 @@ function switchTab(tab) {
   }
 }
 
+// ===== HISTORY =====
+
 async function loadHistory() {
   historyList.innerHTML = '<p class="loading">Loading entries...</p>';
-
-  // Update week label
   weekLabel.textContent = formatWeekRange(currentWeekStart);
 
-  // Disable next button if we're on current week
   const thisWeekStart = getWeekStart(new Date());
   nextWeekBtn.disabled = currentWeekStart >= thisWeekStart;
 
@@ -256,11 +508,7 @@ async function loadHistory() {
     }
 
     historyEntries = data || [];
-
-    // Calculate and render weekly summary
     renderWeeklySummary();
-
-    // Filter and render history for current week
     renderHistory();
   } catch (err) {
     console.error('Error:', err);
@@ -281,11 +529,9 @@ function renderWeeklySummary() {
   const weekEntries = getWeekEntries();
   const entryCount = weekEntries.length;
 
-  // Update entries count
   summaryEntries.textContent = `${entryCount} of 7 days`;
 
   if (entryCount === 0) {
-    // No entries - show defaults
     avgMood.textContent = '-';
     avgEnergy.textContent = '-';
     avgStress.textContent = '-';
@@ -299,7 +545,6 @@ function renderWeeklySummary() {
     return;
   }
 
-  // Calculate averages
   const moodAvg = calculateAverage(weekEntries, 'mood');
   const energyAvg = calculateAverage(weekEntries, 'energy');
   const stressAvg = calculateAverage(weekEntries, 'stress');
@@ -310,7 +555,6 @@ function renderWeeklySummary() {
   avgStress.textContent = stressAvg !== null ? stressAvg.toFixed(1) : '-';
   avgCravings.textContent = cravingsAvg !== null ? cravingsAvg.toFixed(1) : '-';
 
-  // Calculate recovery compliance
   const naltrexoneCount = weekEntries.filter(e => e.naltrexone).length;
   const meetingCount = weekEntries.filter(e => e.meeting_attended).length;
   const sponsorContactCount = weekEntries.filter(e => e.sponsor_contact).length;
@@ -321,13 +565,31 @@ function renderWeeklySummary() {
   meetingsCount.textContent = meetingCount;
   sponsorCount.textContent = sponsorContactCount;
 
-  // Calculate banned behaviors
-  const bannedBehaviors = {
-    THC: weekEntries.filter(e => e.thc).length,
-    Alcohol: weekEntries.filter(e => e.alcohol).length,
-    Fantasy: weekEntries.filter(e => e.fantasy_sports).length,
-    Other: weekEntries.filter(e => e.other_compulsion).length
-  };
+  // Calculate banned behaviors (including custom)
+  const bannedBehaviors = {};
+
+  // Built-in banned items
+  builtInItems.banned.forEach(item => {
+    if (item.id !== 'other_compulsion') {
+      const count = weekEntries.filter(e => e[item.id]).length;
+      if (count > 0) bannedBehaviors[item.label] = count;
+    }
+  });
+
+  // Other compulsion
+  const otherCount = weekEntries.filter(e => e.other_compulsion).length;
+  if (otherCount > 0) bannedBehaviors['Other'] = otherCount;
+
+  // Custom banned items
+  customItems.banned.forEach(item => {
+    let count = 0;
+    weekEntries.forEach(entry => {
+      if (entry.custom_banned && entry.custom_banned[item.id]) {
+        count++;
+      }
+    });
+    if (count > 0) bannedBehaviors[item.label] = count;
+  });
 
   const totalIncidents = Object.values(bannedBehaviors).reduce((a, b) => a + b, 0);
 
@@ -335,13 +597,11 @@ function renderWeeklySummary() {
     bannedSummary.innerHTML = '<span class="banned-clean">Clean week!</span>';
   } else {
     const incidentHtml = Object.entries(bannedBehaviors)
-      .filter(([_, count]) => count > 0)
       .map(([name, count]) => `<span class="banned-incident">${name}: ${count}</span>`)
       .join('');
     bannedSummary.innerHTML = incidentHtml;
   }
 
-  // Calculate highlights (best mood day)
   renderHighlights(weekEntries);
 }
 
@@ -359,7 +619,6 @@ function renderHighlights(entries) {
 
   const highlights = [];
 
-  // Find best mood day
   const bestMood = entries.reduce((best, entry) => {
     if (entry.mood !== null && (best === null || entry.mood > best.mood)) {
       return entry;
@@ -376,7 +635,6 @@ function renderHighlights(entries) {
     });
   }
 
-  // Find highest energy day
   const bestEnergy = entries.reduce((best, entry) => {
     if (entry.energy !== null && (best === null || entry.energy > best.energy)) {
       return entry;
@@ -393,7 +651,6 @@ function renderHighlights(entries) {
     });
   }
 
-  // Find lowest stress day
   const lowestStress = entries.reduce((best, entry) => {
     if (entry.stress !== null && (best === null || entry.stress < best.stress)) {
       return entry;
@@ -446,12 +703,20 @@ function renderHistory() {
       year: 'numeric'
     });
 
-    // Collect flags for banned behaviors
     const flags = [];
     if (entry.thc) flags.push('THC');
     if (entry.alcohol) flags.push('Alcohol');
     if (entry.fantasy_sports) flags.push('Fantasy');
     if (entry.other_compulsion) flags.push('Other');
+
+    // Check custom banned items
+    if (entry.custom_banned) {
+      customItems.banned.forEach(item => {
+        if (entry.custom_banned[item.id]) {
+          flags.push(item.label);
+        }
+      });
+    }
 
     const flagsHtml = flags.length > 0
       ? `<div class="history-card-flags">${flags.map(f => `<span class="history-card-flag">${f}</span>`).join('')}</div>`
@@ -470,7 +735,6 @@ function renderHistory() {
     `;
   }).join('');
 
-  // Add click handlers
   document.querySelectorAll('.history-card').forEach(card => {
     card.addEventListener('click', () => {
       const date = card.dataset.date;
@@ -482,27 +746,21 @@ function renderHistory() {
 async function selectEntry(date) {
   selectedDate = date;
 
-  // Find entry in cached data
   const entry = historyEntries.find(e => e.entry_date === date);
   if (!entry) return;
 
-  // Switch to entry view
   historyView.style.display = 'none';
   entryView.style.display = 'block';
 
-  // Update tab buttons to show neither as truly "active" visually
   tabBtns.forEach(btn => {
     btn.classList.remove('active');
   });
 
-  // Add back button if not already present
   addBackButton();
 
-  // Update date display
   const entryDate = new Date(date + 'T00:00:00');
   updateDateDisplay(entryDate);
 
-  // Reset and populate form
   resetForm();
   existingEntryId = entry.id;
   isEditMode = true;
@@ -512,7 +770,6 @@ async function selectEntry(date) {
 }
 
 function addBackButton() {
-  // Check if back button already exists
   if (document.querySelector('.back-btn')) return;
 
   const backBtn = document.createElement('button');
@@ -534,7 +791,6 @@ function removeBackButton() {
 }
 
 function resetForm() {
-  // Reset sliders to default
   sliderFields.forEach(field => {
     const slider = document.getElementById(field);
     const valueDisplay = document.getElementById(`${field}Value`);
@@ -544,26 +800,22 @@ function resetForm() {
     }
   });
 
-  // Reset toggles
+  // Reset all toggle states
   Object.keys(toggleStates).forEach(field => {
     toggleStates[field] = false;
-    const btn = document.querySelector(`[data-field="${field}"]`);
-    if (btn) {
-      btn.classList.remove('active');
-    }
   });
 
-  // Hide other compulsion field
+  // Re-render toggles to update UI
+  renderAllToggles();
+
   otherCompulsionField.classList.remove('visible');
 
-  // Clear text inputs
   document.getElementById('productive_hours').value = '';
   document.getElementById('other_compulsion_notes').value = '';
   document.getElementById('what_went_well').value = '';
   document.getElementById('what_to_change').value = '';
   document.getElementById('tomorrow_priority').value = '';
 
-  // Reset state
   existingEntryId = null;
   isEditMode = false;
   editIndicator.style.display = 'none';
@@ -580,7 +832,7 @@ async function loadTodayEntry() {
       .eq('entry_date', today)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error && error.code !== 'PGRST116') {
       console.error('Error loading entry:', error);
       showToast('Error loading entry', true);
       return;
@@ -600,7 +852,6 @@ async function loadTodayEntry() {
 }
 
 function populateForm(data) {
-  // Populate sliders
   sliderFields.forEach(field => {
     const slider = document.getElementById(field);
     const valueDisplay = document.getElementById(`${field}Value`);
@@ -611,28 +862,44 @@ function populateForm(data) {
     }
   });
 
-  // Populate toggles
-  Object.keys(toggleStates).forEach(field => {
-    if (data[field] !== null && data[field] !== undefined) {
-      toggleStates[field] = data[field];
-      const btn = document.querySelector(`[data-field="${field}"]`);
-      if (btn) {
-        btn.classList.toggle('active', data[field]);
-      }
+  // Populate built-in toggles
+  builtInItems.banned.forEach(item => {
+    if (data[item.id] !== null && data[item.id] !== undefined) {
+      toggleStates[item.id] = data[item.id];
     }
   });
 
-  // Show other compulsion field if needed
+  builtInItems.recovery.forEach(item => {
+    if (data[item.id] !== null && data[item.id] !== undefined) {
+      toggleStates[item.id] = data[item.id];
+    }
+  });
+
+  builtInItems.health.forEach(item => {
+    if (data[item.id] !== null && data[item.id] !== undefined) {
+      toggleStates[item.id] = data[item.id];
+    }
+  });
+
+  // Populate custom toggles
+  ['banned', 'recovery', 'health'].forEach(category => {
+    const customData = data[`custom_${category}`] || {};
+    customItems[category].forEach(item => {
+      toggleStates[item.id] = customData[item.id] || false;
+    });
+  });
+
+  // Re-render toggles to update UI
+  renderAllToggles();
+
   if (toggleStates.other_compulsion) {
     otherCompulsionField.classList.add('visible');
   }
 
-  // Populate number input
   if (data.productive_hours !== null) {
     document.getElementById('productive_hours').value = data.productive_hours;
   }
 
-  // Populate text fields
   if (data.other_compulsion_notes) {
     document.getElementById('other_compulsion_notes').value = data.other_compulsion_notes;
   }
@@ -659,14 +926,12 @@ async function handleSubmit(e) {
     let result;
 
     if (isEditMode && existingEntryId) {
-      // Update existing entry
       result = await supabase
         .from('journal_entries')
         .update(entryData)
         .eq('id', existingEntryId)
         .select();
     } else {
-      // Insert new entry
       result = await supabase
         .from('journal_entries')
         .insert(entryData)
@@ -677,7 +942,6 @@ async function handleSubmit(e) {
       throw result.error;
     }
 
-    // Update state for potential future edits
     if (result.data && result.data[0]) {
       existingEntryId = result.data[0].id;
       isEditMode = true;
@@ -687,7 +951,6 @@ async function handleSubmit(e) {
     showToast(isEditMode ? 'Entry updated!' : 'Entry saved!');
     submitBtn.textContent = 'Update Entry';
 
-    // Update history cache if we have one
     if (historyEntries.length > 0) {
       const updatedEntry = result.data[0];
       const existingIndex = historyEntries.findIndex(e => e.entry_date === updatedEntry.entry_date);
@@ -709,58 +972,71 @@ async function handleSubmit(e) {
 
 function collectFormData() {
   const productiveHours = document.getElementById('productive_hours').value;
-
-  // Use selected date or today
   const entryDate = selectedDate || getTodayDate();
+
+  // Collect custom toggle values
+  const customBanned = {};
+  const customRecovery = {};
+  const customHealth = {};
+
+  customItems.banned.forEach(item => {
+    customBanned[item.id] = toggleStates[item.id] || false;
+  });
+
+  customItems.recovery.forEach(item => {
+    customRecovery[item.id] = toggleStates[item.id] || false;
+  });
+
+  customItems.health.forEach(item => {
+    customHealth[item.id] = toggleStates[item.id] || false;
+  });
 
   return {
     entry_date: entryDate,
 
-    // Mood & Energy
     mood: parseInt(document.getElementById('mood').value),
     energy: parseInt(document.getElementById('energy').value),
     stress: parseInt(document.getElementById('stress').value),
 
-    // Relationships
     ashley_connection: parseInt(document.getElementById('ashley_connection').value),
-    ashley_conflict: toggleStates.ashley_conflict,
-    ashley_thoughtful: toggleStates.ashley_thoughtful,
-    ashley_withdrew: toggleStates.ashley_withdrew,
+    ashley_conflict: toggleStates.ashley_conflict || false,
+    ashley_thoughtful: toggleStates.ashley_thoughtful || false,
+    ashley_withdrew: toggleStates.ashley_withdrew || false,
     kids_quality_time: parseInt(document.getElementById('kids_quality_time').value),
-    kids_engaged: toggleStates.kids_engaged,
+    kids_engaged: toggleStates.kids_engaged || false,
 
-    // Banned Behaviors
-    thc: toggleStates.thc,
-    alcohol: toggleStates.alcohol,
-    fantasy_sports: toggleStates.fantasy_sports,
-    other_compulsion: toggleStates.other_compulsion,
+    thc: toggleStates.thc || false,
+    alcohol: toggleStates.alcohol || false,
+    fantasy_sports: toggleStates.fantasy_sports || false,
+    other_compulsion: toggleStates.other_compulsion || false,
     other_compulsion_notes: toggleStates.other_compulsion ?
       document.getElementById('other_compulsion_notes').value : null,
 
-    // Recovery
-    naltrexone: toggleStates.naltrexone,
-    meeting_attended: toggleStates.meeting_attended,
-    sponsor_contact: toggleStates.sponsor_contact,
-    therapy_this_week: toggleStates.therapy_this_week,
+    naltrexone: toggleStates.naltrexone || false,
+    meeting_attended: toggleStates.meeting_attended || false,
+    sponsor_contact: toggleStates.sponsor_contact || false,
+    therapy_this_week: toggleStates.therapy_this_week || false,
     cravings: parseInt(document.getElementById('cravings').value),
 
-    // Health
-    medications_taken: toggleStates.medications_taken,
-    post_dinner_walk: toggleStates.post_dinner_walk,
-    meditation: toggleStates.meditation,
-    workout: toggleStates.workout,
+    medications_taken: toggleStates.medications_taken || false,
+    post_dinner_walk: toggleStates.post_dinner_walk || false,
+    meditation: toggleStates.meditation || false,
+    workout: toggleStates.workout || false,
     sleep_quality: parseInt(document.getElementById('sleep_quality').value),
 
-    // Work
     productive_hours: productiveHours ? parseFloat(productiveHours) : null,
     strategic_percent: parseInt(document.getElementById('strategic_percent').value),
     decision_fatigue: parseInt(document.getElementById('decision_fatigue').value),
-    protected_peak_hours: toggleStates.protected_peak_hours,
+    protected_peak_hours: toggleStates.protected_peak_hours || false,
 
-    // Reflection
     what_went_well: document.getElementById('what_went_well').value || null,
     what_to_change: document.getElementById('what_to_change').value || null,
-    tomorrow_priority: document.getElementById('tomorrow_priority').value || null
+    tomorrow_priority: document.getElementById('tomorrow_priority').value || null,
+
+    // Custom fields
+    custom_banned: Object.keys(customBanned).length > 0 ? customBanned : null,
+    custom_recovery: Object.keys(customRecovery).length > 0 ? customRecovery : null,
+    custom_health: Object.keys(customHealth).length > 0 ? customHealth : null
   };
 }
 

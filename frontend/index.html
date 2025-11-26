@@ -20,6 +20,7 @@
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="today">Today</button>
       <button class="tab-btn" data-tab="history">History</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
     </nav>
 
     <!-- History View -->
@@ -107,6 +108,49 @@
       </div>
     </div>
 
+    <!-- Settings View -->
+    <div id="settingsView" class="view" style="display: none;">
+      <div class="settings-intro">
+        <p>Customize which options appear in each section. You can hide built-in items or add your own.</p>
+      </div>
+
+      <!-- Banned Behaviors Settings -->
+      <section class="section settings-section">
+        <h2 class="section-title">Banned Behaviors</h2>
+        <div class="settings-items" id="settingsBanned">
+          <!-- Dynamically rendered -->
+        </div>
+        <div class="settings-add">
+          <input type="text" id="newBannedItem" placeholder="Add new item..." class="settings-input">
+          <button type="button" class="settings-add-btn" data-category="banned">+ Add</button>
+        </div>
+      </section>
+
+      <!-- Recovery Settings -->
+      <section class="section settings-section">
+        <h2 class="section-title">Recovery Compliance</h2>
+        <div class="settings-items" id="settingsRecovery">
+          <!-- Dynamically rendered -->
+        </div>
+        <div class="settings-add">
+          <input type="text" id="newRecoveryItem" placeholder="Add new item..." class="settings-input">
+          <button type="button" class="settings-add-btn" data-category="recovery">+ Add</button>
+        </div>
+      </section>
+
+      <!-- Health Settings -->
+      <section class="section settings-section">
+        <h2 class="section-title">Health Protocols</h2>
+        <div class="settings-items" id="settingsHealth">
+          <!-- Dynamically rendered -->
+        </div>
+        <div class="settings-add">
+          <input type="text" id="newHealthItem" placeholder="Add new item..." class="settings-input">
+          <button type="button" class="settings-add-btn" data-category="health">+ Add</button>
+        </div>
+      </section>
+    </div>
+
     <!-- Today/Entry View -->
     <div id="entryView" class="view">
     <form id="journalForm">
@@ -181,11 +225,8 @@
         <h2 class="section-title">Banned Behaviors</h2>
 
         <div class="form-group">
-          <div class="toggle-group">
-            <button type="button" class="toggle-btn" data-field="thc">THC</button>
-            <button type="button" class="toggle-btn" data-field="alcohol">Alcohol</button>
-            <button type="button" class="toggle-btn" data-field="fantasy_sports">Fantasy Sports</button>
-            <button type="button" class="toggle-btn" data-field="other_compulsion">Other</button>
+          <div class="toggle-group" id="bannedToggles">
+            <!-- Dynamically rendered -->
           </div>
         </div>
 
@@ -200,11 +241,8 @@
         <h2 class="section-title">Recovery Compliance</h2>
 
         <div class="form-group">
-          <div class="toggle-group">
-            <button type="button" class="toggle-btn" data-field="naltrexone">Naltrexone</button>
-            <button type="button" class="toggle-btn" data-field="meeting_attended">Meeting</button>
-            <button type="button" class="toggle-btn" data-field="sponsor_contact">Sponsor Contact</button>
-            <button type="button" class="toggle-btn" data-field="therapy_this_week">Therapy This Week</button>
+          <div class="toggle-group" id="recoveryToggles">
+            <!-- Dynamically rendered -->
           </div>
         </div>
 
@@ -222,11 +260,8 @@
         <h2 class="section-title">Health Protocols</h2>
 
         <div class="form-group">
-          <div class="toggle-group">
-            <button type="button" class="toggle-btn" data-field="medications_taken">Medications</button>
-            <button type="button" class="toggle-btn" data-field="post_dinner_walk">Walk</button>
-            <button type="button" class="toggle-btn" data-field="meditation">Meditation</button>
-            <button type="button" class="toggle-btn" data-field="workout">Workout</button>
+          <div class="toggle-group" id="healthToggles">
+            <!-- Dynamically rendered -->
           </div>
         </div>
 
