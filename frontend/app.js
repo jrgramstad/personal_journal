@@ -5,7 +5,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let existingEntryId = null;
 let isEditMode = false;
 let currentView = 'today'; // 'today', 'history', or 'settings'
-let selectedDate = null; // null means today, otherwise YYYY-MM-DD
+let currentJournalDate = null; // The date being journaled (YYYY-MM-DD), defaults to yesterday
 let historyEntries = [];
 let currentWeekStart = null; // Start of currently viewed week (Monday)
 
@@ -45,6 +45,12 @@ let customItems = {
   health: []
 };
 
+// Static toggle fields (not dynamically rendered)
+const staticToggleFields = [
+  'ashley_conflict', 'ashley_thoughtful', 'ashley_withdrew',
+  'kids_engaged', 'protected_peak_hours'
+];
+
 // Toggle field states (includes both built-in and custom)
 const toggleStates = {};
 
@@ -65,6 +71,12 @@ const tabBtns = document.querySelectorAll('.tab-btn');
 const bannedToggles = document.getElementById('bannedToggles');
 const recoveryToggles = document.getElementById('recoveryToggles');
 const healthToggles = document.getElementById('healthToggles');
+
+// Date navigator elements
+const dateNav = document.getElementById('dateNav');
+const dateNavLabel = document.getElementById('dateNavLabel');
+const prevDayBtn = document.getElementById('prevDayBtn');
+const nextDayBtn = document.getElementById('nextDayBtn');
 
 // Settings containers
 const settingsBanned = document.getElementById('settingsBanned');
@@ -106,11 +118,13 @@ async function init() {
   setupDate();
   setupSliders();
   renderAllToggles();
+  setupStaticToggles();
   setupForm();
   setupTabs();
   setupWeekNav();
+  setupDateNav();
   setupSettings();
-  await loadTodayEntry();
+  await loadEntry();
 }
 
 // ===== SETTINGS MANAGEMENT =====
@@ -156,6 +170,21 @@ function initializeToggleStates() {
     customItems[category].forEach(item => {
       toggleStates[item.id] = false;
     });
+  });
+
+  // Initialize static toggle states
+  staticToggleFields.forEach(field => {
+    toggleStates[field] = false;
+  });
+}
+
+function setupStaticToggles() {
+  // Attach event listeners to static toggle buttons (relationships, work)
+  staticToggleFields.forEach(field => {
+    const btn = document.querySelector(`.toggle-btn[data-field="${field}"]`);
+    if (btn) {
+      btn.addEventListener('click', handleToggleClick);
+    }
   });
 }
 
@@ -361,20 +390,50 @@ function handleDeleteCustomItem(e) {
 // ===== DATE & SLIDERS =====
 
 function setupDate() {
-  updateDateDisplay(getJournalDisplayDate());
+  // Initialize to yesterday by default
+  currentJournalDate = getYesterdayDateStr();
+  updateDateDisplay();
 }
 
-function updateDateDisplay(date, isEditing = false) {
+function updateDateDisplay() {
+  const date = new Date(currentJournalDate + 'T00:00:00');
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const dateStr = date.toLocaleDateString('en-US', options);
 
-  if (isEditing) {
-    // When editing from history, just show the date
-    dateDisplay.textContent = dateStr;
+  // Header display
+  dateDisplay.innerHTML = `<span class="reflecting-label">Reflecting on</span> ${dateStr}`;
+
+  // Date navigator label
+  const yesterday = getYesterdayDateStr();
+  if (currentJournalDate === yesterday) {
+    dateNavLabel.textContent = `Yesterday`;
   } else {
-    // Default journal view - show "Reflecting on" prefix
-    dateDisplay.innerHTML = `<span class="reflecting-label">Reflecting on</span> ${dateStr}`;
+    const shortOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+    dateNavLabel.textContent = date.toLocaleDateString('en-US', shortOptions);
   }
+
+  // Enable/disable next button (can't go past yesterday)
+  nextDayBtn.disabled = currentJournalDate >= yesterday;
+}
+
+function setupDateNav() {
+  prevDayBtn.addEventListener('click', () => {
+    navigateDate(-1);
+  });
+
+  nextDayBtn.addEventListener('click', () => {
+    navigateDate(1);
+  });
+}
+
+async function navigateDate(delta) {
+  const date = new Date(currentJournalDate + 'T00:00:00');
+  date.setDate(date.getDate() + delta);
+  currentJournalDate = formatDate(date);
+
+  updateDateDisplay();
+  resetForm();
+  await loadEntry();
 }
 
 function setupSliders() {
@@ -484,12 +543,15 @@ function switchTab(tab) {
     settingsView.style.display = 'block';
   } else {
     entryView.style.display = 'block';
-    if (selectedDate) {
-      selectedDate = null;
+    // Show date navigator
+    dateNav.style.display = 'flex';
+    // If coming from history edit, reset to yesterday
+    if (document.querySelector('.back-btn')) {
       removeBackButton();
+      currentJournalDate = getYesterdayDateStr();
       resetForm();
-      updateDateDisplay(getJournalDisplayDate());
-      loadTodayEntry();
+      updateDateDisplay();
+      loadEntry();
     }
   }
 }
@@ -752,7 +814,7 @@ function renderHistory() {
 }
 
 async function selectEntry(date) {
-  selectedDate = date;
+  currentJournalDate = date;
 
   const entry = historyEntries.find(e => e.entry_date === date);
   if (!entry) return;
@@ -760,14 +822,15 @@ async function selectEntry(date) {
   historyView.style.display = 'none';
   entryView.style.display = 'block';
 
+  // Hide date navigator when editing from history
+  dateNav.style.display = 'none';
+
   tabBtns.forEach(btn => {
     btn.classList.remove('active');
   });
 
   addBackButton();
-
-  const entryDate = new Date(date + 'T00:00:00');
-  updateDateDisplay(entryDate, true);
+  updateDateDisplay();
 
   resetForm();
   existingEntryId = entry.id;
@@ -830,14 +893,12 @@ function resetForm() {
   submitBtn.textContent = 'Save Entry';
 }
 
-async function loadTodayEntry() {
-  const journalDate = getJournalDate();
-
+async function loadEntry() {
   try {
     const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('entry_date', journalDate)
+      .eq('entry_date', currentJournalDate)
       .single();
 
     if (error && error.code !== 'PGRST116') {
@@ -980,7 +1041,7 @@ async function handleSubmit(e) {
 
 function collectFormData() {
   const productiveHours = document.getElementById('productive_hours').value;
-  const entryDate = selectedDate || getJournalDate();
+  const entryDate = currentJournalDate;
 
   // Collect custom toggle values
   const customBanned = {};
@@ -1048,21 +1109,11 @@ function collectFormData() {
   };
 }
 
-function getJournalDate() {
-  // Journal entries are for the previous day (evening reflection on the day that just ended)
+function getYesterdayDateStr() {
+  // Returns yesterday's date as YYYY-MM-DD string
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const year = yesterday.getFullYear();
-  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
-  const day = String(yesterday.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getJournalDisplayDate() {
-  // Returns the Date object for yesterday (for display purposes)
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return yesterday;
+  return formatDate(yesterday);
 }
 
 function showToast(message, isError = false) {

@@ -102,6 +102,48 @@ header h1 {
   transform: scale(0.98);
 }
 
+/* Date Navigator (Entry View) */
+.date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+}
+
+.date-nav-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.date-nav-btn:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.date-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.date-nav-label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 180px;
+  text-align: center;
+}
+
 /* History View */
 .history-list {
   display: flex;
