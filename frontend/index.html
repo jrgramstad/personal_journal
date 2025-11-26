@@ -35,8 +35,37 @@
 
     <!-- History View -->
     <div id="historyView" class="view" style="display: none;">
-      <!-- Week Navigator -->
-      <div class="week-nav">
+      <!-- View Toggle -->
+      <div class="view-toggle">
+        <button type="button" class="view-toggle-btn active" data-view="calendar">Calendar</button>
+        <button type="button" class="view-toggle-btn" data-view="list">List</button>
+      </div>
+
+      <!-- Mood Calendar -->
+      <div class="mood-calendar" id="moodCalendar">
+        <div class="calendar-nav">
+          <button type="button" class="calendar-nav-btn" id="prevMonthBtn">←</button>
+          <span class="calendar-month-label" id="calendarMonthLabel">November 2025</span>
+          <button type="button" class="calendar-nav-btn" id="nextMonthBtn">→</button>
+        </div>
+        <div class="calendar-weekdays">
+          <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid">
+          <!-- Days rendered by JS -->
+        </div>
+        <div class="calendar-legend">
+          <span class="legend-item"><span class="legend-color mood-low"></span>1-3</span>
+          <span class="legend-item"><span class="legend-color mood-mid"></span>4-5</span>
+          <span class="legend-item"><span class="legend-color mood-good"></span>6-7</span>
+          <span class="legend-item"><span class="legend-color mood-great"></span>8-10</span>
+        </div>
+      </div>
+
+      <!-- List View (existing) -->
+      <div class="list-view" id="listView" style="display: none;">
+        <!-- Week Navigator -->
+        <div class="week-nav">
         <button type="button" class="week-nav-btn" id="prevWeekBtn">←</button>
         <span class="week-nav-label" id="weekLabel">Loading...</span>
         <button type="button" class="week-nav-btn" id="nextWeekBtn">→</button>
@@ -116,6 +145,7 @@
       <div id="historyList" class="history-list">
         <p class="loading">Loading entries...</p>
       </div>
+      </div><!-- end list-view -->
     </div>
 
     <!-- Settings View -->

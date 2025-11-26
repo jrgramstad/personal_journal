@@ -8,6 +8,8 @@ let currentView = 'today'; // 'today', 'history', or 'settings'
 let currentJournalDate = null; // The date being journaled (YYYY-MM-DD), defaults to yesterday
 let historyEntries = [];
 let currentWeekStart = null; // Start of currently viewed week (Monday)
+let currentCalendarMonth = new Date(); // Current month being displayed in calendar
+let historySubView = 'calendar'; // 'calendar' or 'list'
 
 // Built-in items for each category (can be hidden but not deleted)
 const builtInItems = {
@@ -83,6 +85,15 @@ const streakDisplay = document.getElementById('streakDisplay');
 const streakCount = document.getElementById('streakCount');
 const streakLabel = document.querySelector('.streak-label');
 
+// Calendar elements
+const moodCalendar = document.getElementById('moodCalendar');
+const calendarGrid = document.getElementById('calendarGrid');
+const calendarMonthLabel = document.getElementById('calendarMonthLabel');
+const prevMonthBtn = document.getElementById('prevMonthBtn');
+const nextMonthBtn = document.getElementById('nextMonthBtn');
+const listView = document.getElementById('listView');
+const viewToggleBtns = document.querySelectorAll('.view-toggle-btn');
+
 // Settings containers
 const settingsBanned = document.getElementById('settingsBanned');
 const settingsRecovery = document.getElementById('settingsRecovery');
@@ -128,6 +139,8 @@ async function init() {
   setupTabs();
   setupWeekNav();
   setupDateNav();
+  setupCalendar();
+  setupViewToggle();
   setupSettings();
   await loadEntry();
   await loadAndDisplayStreak();
@@ -584,8 +597,14 @@ async function loadHistory() {
     }
 
     historyEntries = data || [];
-    renderWeeklySummary();
-    renderHistory();
+
+    // Render based on active sub-view
+    if (historySubView === 'calendar') {
+      renderCalendar();
+    } else {
+      renderWeeklySummary();
+      renderHistory();
+    }
   } catch (err) {
     console.error('Error:', err);
     historyList.innerHTML = '<p class="history-empty">Error connecting to database</p>';
@@ -817,6 +836,153 @@ function renderHistory() {
       selectEntry(date);
     });
   });
+}
+
+// ===== MOOD CALENDAR =====
+
+function setupCalendar() {
+  prevMonthBtn.addEventListener('click', () => {
+    currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() - 1);
+    renderCalendar();
+  });
+
+  nextMonthBtn.addEventListener('click', () => {
+    currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() + 1);
+    renderCalendar();
+  });
+}
+
+function setupViewToggle() {
+  viewToggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      historySubView = view;
+
+      viewToggleBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (view === 'calendar') {
+        moodCalendar.style.display = 'block';
+        listView.style.display = 'none';
+        renderCalendar();
+      } else {
+        moodCalendar.style.display = 'none';
+        listView.style.display = 'block';
+      }
+    });
+  });
+}
+
+function renderCalendar() {
+  const year = currentCalendarMonth.getFullYear();
+  const month = currentCalendarMonth.getMonth();
+
+  // Update month label
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+  calendarMonthLabel.textContent = `${monthNames[month]} ${year}`;
+
+  // Get first day of month and number of days
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Create entry lookup map
+  const entryMap = {};
+  historyEntries.forEach(entry => {
+    entryMap[entry.entry_date] = entry;
+  });
+
+  // Get today and yesterday for comparison
+  const today = new Date();
+  const todayStr = formatDate(today);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = formatDate(yesterday);
+
+  // Build calendar HTML
+  let html = '';
+
+  // Empty cells for days before first of month
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="calendar-day empty"></div>';
+  }
+
+  // Days of the month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const entry = entryMap[dateStr];
+    const isToday = dateStr === todayStr;
+    const isFuture = dateStr > yesterdayStr;
+
+    let classes = ['calendar-day'];
+
+    if (isToday) {
+      classes.push('today');
+    }
+
+    if (entry) {
+      classes.push('has-entry');
+      const mood = entry.mood;
+      if (mood >= 1 && mood <= 3) {
+        classes.push('mood-low');
+      } else if (mood >= 4 && mood <= 5) {
+        classes.push('mood-mid');
+      } else if (mood >= 6 && mood <= 7) {
+        classes.push('mood-good');
+      } else if (mood >= 8 && mood <= 10) {
+        classes.push('mood-great');
+      }
+    } else if (!isFuture) {
+      classes.push('no-mood');
+    }
+
+    const clickable = !isFuture;
+    html += `<div class="${classes.join(' ')}" ${clickable ? `data-date="${dateStr}"` : ''}>${day}</div>`;
+  }
+
+  calendarGrid.innerHTML = html;
+
+  // Add click handlers
+  calendarGrid.querySelectorAll('.calendar-day[data-date]').forEach(dayEl => {
+    dayEl.addEventListener('click', () => {
+      const date = dayEl.dataset.date;
+      openDateEntry(date);
+    });
+  });
+}
+
+function openDateEntry(date) {
+  // Check if there's an existing entry
+  const entry = historyEntries.find(e => e.entry_date === date);
+
+  currentJournalDate = date;
+
+  historyView.style.display = 'none';
+  entryView.style.display = 'block';
+
+  // Hide date navigator when editing from calendar
+  dateNav.style.display = 'none';
+
+  tabBtns.forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  addBackButton();
+  updateDateDisplay();
+  resetForm();
+
+  if (entry) {
+    existingEntryId = entry.id;
+    isEditMode = true;
+    editIndicator.style.display = 'inline-block';
+    submitBtn.textContent = 'Update Entry';
+    populateForm(entry);
+  } else {
+    existingEntryId = null;
+    isEditMode = false;
+    editIndicator.style.display = 'none';
+    submitBtn.textContent = 'Save Entry';
+  }
 }
 
 async function selectEntry(date) {
